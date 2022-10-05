@@ -21,12 +21,15 @@ import io.eiren.util.ann.ThreadSecure;
 import io.eiren.util.collections.FastList;
 import solarxr_protocol.datatypes.TrackerIdT;
 
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
 
+import com.jme3.math.Vector3f;
 
 public class VRServer extends Thread {
 
@@ -44,12 +47,37 @@ public class VRServer extends Thread {
 	private final SerialHandler serialHandler;
 	private final AutoBoneHandler autoBoneHandler;
 	private final ProtocolAPI protocolAPI;
+	public pipes p = null;
+	public  RandomAccessFile AprilPipe = null;
+	public  RandomAccessFile UnrealPipe = null;
+
+	public boolean connectToApril = true;
+	public boolean connectToUnreal = true;
+
+	public boolean reconnecToUnreal = false;
 
 	private final ConfigManager configManager;
+	public boolean DebugWinSpawned = false;
 
 	/**
 	 * This function is used by VRWorkout, do not remove!
 	 */
+	public void connectToUE()
+	{
+		String pipe_path = String.format("\\\\.\\pipe\\unreal_slimevr_pipe_%d", 0);
+		p = new pipes();
+		byte[] buf = new byte[1];
+		try {
+			UnrealPipe = p.connect_to_pipe(pipe_path);
+			int ret = UnrealPipe.read(buf, 0, 1);
+			UnrealPipe.write(buf, 0, 1);
+			if (buf[0] == 99)
+				System.out.println("Connection to Unreal succesful");
+		} catch (InterruptedException | IOException e1) {
+			e1.printStackTrace();
+		}
+	}
+
 	public VRServer() {
 		this("vrconfig.yml");
 	}
@@ -57,6 +85,31 @@ public class VRServer extends Thread {
 	public VRServer(String configPath) {
 		super("VRServer");
 
+		//	sprintf(pipe_path, "%s%d", "\\\\.\\pipe\\tparser_main_pipe_id_", 0);
+		if (connectToApril){
+			String pipe_path = String.format("\\\\.\\pipe\\slimevr_april_pipe_%d", 0);
+
+			p = new pipes();
+			byte[] buf = new byte[1];
+
+			try {
+				AprilPipe = p.connect_to_pipe(pipe_path);
+				int ret = AprilPipe.read(buf, 0, 1);
+				AprilPipe.write(buf, 0, 1);
+				if (buf[0] == 99)
+					System.out.println("Connection to Apriltag succesful");
+
+
+			} catch (InterruptedException | IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+		}
+		if (connectToUnreal)
+		{
+			connectToUE();
+		}
+		
 		this.configManager = new ConfigManager(configPath);
 		this.configManager.loadConfig();
 
@@ -197,6 +250,15 @@ public class VRServer extends Thread {
 			}
 			for (Tracker tracker : trackers) {
 				tracker.tick();
+				String s = tracker.getName();
+				if (s.equals("human://RIGHT_UPPER_LEGa"))
+				{ 
+					Vector3f v = new Vector3f(0, 0, 0);
+					tracker.getPosition(v);
+					s = String.format("%.4f %.4f %.4f", v.x, v.y, v.z);
+					System.out.println(s);
+				}
+
 			}
 			humanPoseProcessor.update();
 			for (Bridge bridge : bridges) {

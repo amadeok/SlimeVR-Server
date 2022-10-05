@@ -13,6 +13,8 @@ import java.io.IOException;
 import java.net.ServerSocket;
 
 
+
+
 public class Main {
 
 	public static String VERSION = "0.2.1";
@@ -20,6 +22,7 @@ public class Main {
 	public static VRServer vrServer;
 
 	public static void main(String[] args) {
+
 		System.setProperty("awt.useSystemAAFontSettings", "on");
 		System.setProperty("swing.aatext", "true");
 

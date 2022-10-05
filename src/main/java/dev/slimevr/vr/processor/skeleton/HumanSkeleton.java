@@ -10,10 +10,57 @@ import dev.slimevr.vr.processor.ComputedHumanPoseTrackerPosition;
 import dev.slimevr.vr.processor.TransformNode;
 import dev.slimevr.vr.trackers.*;
 import io.eiren.util.collections.FastList;
+import solarxr_protocol.datatypes.math.Quat;
 
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+import javax.swing.JFrame;
+import javax.swing.JTextField;
 import java.util.List;
 import java.util.Map;
 
+class MKeyListener extends KeyAdapter {
+ 
+	public HumanSkeleton parent;
+    @Override
+    public void keyPressed(KeyEvent event) {
+ 
+  char ch = event.getKeyChar();
+ 
+  if (ch == 'a' ) {
+	String s = parent.textField.getText();
+	String[] sl = s.split(" ");
+	if (sl.length == 3){
+	parent.testOffset.x = Float.parseFloat(sl[0]);
+	parent.testOffset.y = Float.parseFloat(sl[1]);
+	parent.testOffset.z = Float.parseFloat(sl[2]);
+	parent.test();
+
+	}
+
+	System.out.println(event.getKeyChar());
+ 
+  }
+  else if (ch == 'b')
+  {
+	  parent.test();
+  }
+  else if (ch == 'c')
+  {
+	parent.vrserverRef.connectToUE();
+	parent.vrserverRef.connectToUnreal = true;
+  }
+  if (event.getKeyCode() == KeyEvent.VK_HOME) {
+ 
+System.out.println("Key codes: " + event.getKeyCode());
+ 
+  }
+    }
+}
 
 public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 
@@ -63,6 +110,12 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 	// @formatter:on
 	// #endregion
 	// #region Buffers
+	private  Quaternion aprilQuat = new Quaternion();
+
+	private final Vector3f aprilVec = new Vector3f();
+	private byte[] aprilRecvBuff = new byte[57];
+	private byte[] aprilVecBuff = new byte[8];
+
 	private final Vector3f posBuf = new Vector3f();
 	private final Quaternion rotBuf1 = new Quaternion();
 	private final Quaternion rotBuf2 = new Quaternion();
@@ -86,7 +139,7 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 	protected Tracker leftUpperLegTracker;
 	protected Tracker leftLowerLegTracker;
 	protected Tracker leftFootTracker;
-	protected Tracker rightUpperLegTracker;
+	public Tracker rightUpperLegTracker;
 	protected Tracker rightLowerLegTracker;
 	protected Tracker rightFootTracker;
 	protected Tracker leftControllerTracker;
@@ -136,8 +189,14 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 	// #endregion
 
 	// #region Constructors
+	public JTextField textField;
+	public Vector3f testOffset = new Vector3f();
+	public VRServer vrserverRef;
+
 	protected HumanSkeleton(List<? extends ComputedHumanPoseTracker> computedTrackers) {
 		assembleSkeleton(false);
+		
+
 
 		// Set default skeleton configuration (callback automatically sets
 		// initial offsets)
@@ -157,6 +216,26 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 		this(computedTrackers);
 		setTrackersFromServer(server);
 		skeletonConfig.loadFromConfig(server.getConfigManager());
+
+		vrserverRef = server;
+		
+		if (! server.DebugWinSpawned)
+		{
+		textField = new JTextField();
+		MKeyListener ks = new MKeyListener();
+		ks.parent = this;
+		textField.addKeyListener(ks);
+		
+		JFrame jframe = new JFrame();
+		
+		jframe.add(textField);
+		
+		jframe.setSize(400, 350);
+		
+		jframe.setVisible(true);
+		server.DebugWinSpawned = true;
+	}
+
 	}
 
 	public HumanSkeleton(
@@ -190,6 +269,15 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 		skeletonConfig.setConfigs(configs, null, null);
 	}
 
+	public void test()
+	{
+		//computedRightFootTracker.position.set(testOffset);
+		//this.trackerRightFootNode.worldTransform.setTranslation(testOffset);
+		this.trackerRightFootNode.localTransform.setTranslation(testOffset);
+		this.rightFootTracker.setBodyPosition(null);
+
+
+	}
 	public HumanSkeleton(
 		List<? extends Tracker> trackers,
 		List<? extends ComputedHumanPoseTracker> computedTrackers,
@@ -197,7 +285,7 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 	) {
 		this(trackers, computedTrackers, configs, null);
 	}
-	// #endregion
+	// #endregionsetBodyPosition
 
 	protected void assembleSkeleton(boolean reset) {
 		if (reset) {
@@ -788,12 +876,113 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 	@VRServerThread
 	@Override
 	public void updatePose() {
+		if (vrserverRef.connectToApril)
+			GetAprilVectors();
 		updateLocalTransforms();
 		updateRootTrackers();
 		updateComputedTrackers();
 		tweakLegPos();
+
+		Quaternion sq = new Quaternion();
+		Quaternion aq = new Quaternion();
+		if (rightUpperLegTracker != null)
+		rightUpperLegTracker.getRotation(sq);
+		aq.fromAngles(aprilVec.x, aprilVec.y, aprilVec.z);
+		Quaternion q = sq.mult(aq.inverse());
+		String s = String.format("%.4f %.4f %.4f %.4f || %.4f %.4f %.4f %.4f", sq.getW(),  sq.getX(), sq.getY(), sq.getZ(), aq.getW(),  aq.getX(), aq.getY(), aq.getZ() );
+		System.out.println(q);
+
+		if (vrserverRef.connectToUnreal)
+		{
+			pipeToUE(sq, aq);
+		}
+
 	}
 	// #endregion
+	public static double toDouble(byte[] bytes) {
+		return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getDouble();
+	}
+	public static byte[] DoubleToBytes(double d) {
+		byte[] bytes = new byte[8];
+		ByteBuffer.wrap(bytes).putDouble(d);
+		return bytes;
+	}
+	public static byte[] FloatToBytes(float d) {
+		byte[] bytes = new byte[4];
+		ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putFloat(d);
+		return bytes;
+	}
+
+	protected void pipeToUE(Quaternion q1, Quaternion q2) {
+		byte[] bytes = new byte[76];
+		try {
+			System.arraycopy(FloatToBytes(q1.getW()), 0, bytes, 0, 4);
+			System.arraycopy(FloatToBytes(q1.getX()), 0, bytes, 4, 4);
+			System.arraycopy(FloatToBytes(q1.getY()), 0, bytes, 8, 4);
+			System.arraycopy(FloatToBytes(q1.getZ()), 0, bytes, 12, 4);
+
+			System.arraycopy(FloatToBytes(q2.getW()), 0, bytes, 16, 4);
+			System.arraycopy(FloatToBytes(q2.getX()), 0, bytes,20, 4);
+			System.arraycopy(FloatToBytes(q2.getY()), 0, bytes, 24, 4);
+			System.arraycopy(FloatToBytes(q2.getZ()), 0, bytes, 28, 4);
+
+			System.arraycopy(FloatToBytes(aprilVec.getX()), 0, bytes,32, 4);
+			System.arraycopy(FloatToBytes(aprilVec.getY()), 0, bytes, 36, 4);
+			System.arraycopy(FloatToBytes(aprilVec.getZ()), 0, bytes, 40, 4);
+
+			System.arraycopy(aprilRecvBuff, 25, bytes,44, 32);
+
+			vrserverRef.UnrealPipe.write(bytes);
+			vrserverRef.UnrealPipe.read(bytes, 0, 1);
+
+
+
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			System.out.println("piping to unreal failed");
+			vrserverRef.connectToUnreal = false;
+			e.printStackTrace();
+		}
+
+	}
+	protected void GetAprilVectors() {
+		try {
+			vrserverRef.AprilPipe.read(aprilRecvBuff, 0, 57);
+			 //=  aprilRecvBuff[0:10];
+			System.arraycopy(aprilRecvBuff, 1, aprilVecBuff, 0, 8);
+
+			aprilVec.x = (float)toDouble(aprilVecBuff);
+			System.arraycopy(aprilRecvBuff, 9, aprilVecBuff, 0, 8);
+
+			aprilVec.y = (float)toDouble(aprilVecBuff);
+			System.arraycopy(aprilRecvBuff, 17, aprilVecBuff, 0, 8);
+
+			aprilVec.z = (float)toDouble(aprilVecBuff);
+
+			float w, x, y, z;
+
+			System.arraycopy(aprilRecvBuff, 25, aprilVecBuff, 0, 8);
+			w = (float)toDouble(aprilVecBuff);
+
+			System.arraycopy(aprilRecvBuff, 33, aprilVecBuff, 0, 8);
+			x = (float)toDouble(aprilVecBuff);
+
+			System.arraycopy(aprilRecvBuff, 41, aprilVecBuff, 0, 8);
+			y = (float)toDouble(aprilVecBuff);
+
+			System.arraycopy(aprilRecvBuff, 49, aprilVecBuff, 0, 8);
+			z = (float)toDouble(aprilVecBuff);
+
+			aprilQuat.set(w, x, y, z);
+
+
+
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}
 
 	protected void updateRootTrackers() {
 		hmdNode.update();
