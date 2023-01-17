@@ -45,6 +45,8 @@ public class VRServerGUI extends JFrame {
 	private JButton resetButton;
 	private JButton floorClipButton;
 	private JButton skatingCorrectionButton;
+	private JButton ConnectToAprilTag;
+	private JButton ConnectToVisualizer;
 
 	private WindowConfig config;
 
@@ -246,6 +248,43 @@ public class VRServerGUI extends JFrame {
 							public void mouseClicked(MouseEvent e) {
 								boolean[] state = server.humanPoseProcessor.getLegTweaksState();
 								setSkatingReductionEnabled(!state[1]);
+							}
+						});
+					}
+				});
+
+				add(Box.createHorizontalStrut(10));
+				add(ConnectToAprilTag = new JButton("Connect to AprilTag") {
+					{
+						addMouseListener(new MouseInputAdapter() {
+							@Override
+							public void mouseClicked(MouseEvent e) {
+								server.ConnectToApril();
+							}
+						});
+					}
+				});
+				add(Box.createHorizontalStrut(10));
+				add(ConnectToVisualizer = new JButton("Connect to AprilTag Visualizer") {
+					{
+						addMouseListener(new MouseInputAdapter() {
+							@Override
+							public void mouseClicked(MouseEvent e) {
+								server.connectToUE();
+							}
+						});
+					}
+				});
+				add(Box.createHorizontalStrut(10));
+				add(ConnectToVisualizer = new JButton("Apply") {
+					{
+						addMouseListener(new MouseInputAdapter() {
+							@Override
+							public void mouseClicked(MouseEvent e) {
+								if (server.ApplyOffset)
+									server.ApplyOffset = false;
+								else
+									server.ApplyOffset = true;
 							}
 						});
 					}

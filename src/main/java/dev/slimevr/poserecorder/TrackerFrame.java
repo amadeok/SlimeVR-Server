@@ -93,6 +93,16 @@ public final class TrackerFrame implements Tracker {
 		store.set(Quaternion.IDENTITY);
 		return false;
 	}
+	@Override
+	public boolean getAprilRotation(Quaternion store) {
+		if (hasData(TrackerFrameData.ROTATION)) {
+			store.set(rotation);
+			return true;
+		}
+
+		store.set(Quaternion.IDENTITY);
+		return false;
+	}
 
 	@Override
 	public boolean getPosition(Vector3f store) {

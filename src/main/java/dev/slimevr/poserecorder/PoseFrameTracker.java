@@ -20,6 +20,8 @@ public class PoseFrameTracker implements Tracker, Iterable<TrackerFrame> {
 	private final int trackerId = Tracker.getNextLocalTrackerId();
 	private int frameCursor = 0;
 
+
+	
 	public PoseFrameTracker(String name, FastList<TrackerFrame> frames) {
 		if (frames == null) {
 			throw new NullPointerException("frames must not be null");
@@ -149,6 +151,18 @@ public class PoseFrameTracker implements Tracker, Iterable<TrackerFrame> {
 		store.set(Quaternion.IDENTITY);
 		return false;
 	}
+	@Override
+	public boolean getAprilRotation(Quaternion store) {
+		TrackerFrame frame = safeGetFrame();
+		if (frame != null && frame.hasData(TrackerFrameData.ROTATION)) {
+			store.set(frame.rotation);
+			return true;
+		}
+
+		store.set(Quaternion.IDENTITY);
+		return false;
+	}
+	
 
 	@Override
 	public boolean getPosition(Vector3f store) {

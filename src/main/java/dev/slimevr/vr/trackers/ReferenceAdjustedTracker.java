@@ -12,7 +12,26 @@ public class ReferenceAdjustedTracker<E extends Tracker> implements Tracker {
 	public final Quaternion yawFix = new Quaternion();
 	public final Quaternion gyroFix = new Quaternion();
 	public final Quaternion attachmentFix = new Quaternion();
+
+	public final Quaternion AprilYawFix = new Quaternion();
+	public final Quaternion AprilGyroFix = new Quaternion();
+	public final Quaternion AprilAttachmentFix = new Quaternion();
+
+	//public Byte aprilDataAvailable = 0;
+
 	protected float confidenceMultiplier = 1.0f;
+	public  Byte aprilDataAvailable = 0;
+
+	//@Override
+	public void SetAprilDataAvailable(Byte b)
+	{
+		aprilDataAvailable = b;
+	}
+
+	public Byte IsAprilDataAvailable()
+	{
+		return aprilDataAvailable;
+	}
 
 	public ReferenceAdjustedTracker(E tracker) {
 		this.tracker = tracker;
@@ -41,14 +60,21 @@ public class ReferenceAdjustedTracker<E extends Tracker> implements Tracker {
 	 * Performs {@link #resetYaw(Quaternion)} for yaw drift correction.
 	 */
 	@Override
-	public void resetFull(Quaternion reference) {
+	public void resetFull(Quaternion reference) 
+	{
 		tracker.resetFull(reference);
 		fixGyroscope();
-
 		Quaternion sensorRotation = new Quaternion();
 		tracker.getRotation(sensorRotation);
 		gyroFix.mult(sensorRotation, sensorRotation);
 		attachmentFix.set(sensorRotation).inverseLocal();
+
+		Quaternion AprilSensorRotation = new Quaternion();
+		AprilSensorRotation.set(tracker.aprilQuat);
+		AprilGyroFix.mult(AprilSensorRotation, AprilSensorRotation);
+		AprilAttachmentFix.set(AprilSensorRotation).inverseLocal();
+		
+	//AprilResetCorrection.set(reference.mult(aprilQuat.inverse()));
 
 		fixYaw(reference);
 	}
@@ -81,6 +107,24 @@ public class ReferenceAdjustedTracker<E extends Tracker> implements Tracker {
 		sensorRotation.fromAngles(0, angles[1], 0);
 
 		yawFix.set(sensorRotation).inverseLocal().multLocal(targetTrackerRotation);
+
+
+
+		Quaternion AprilTargetTrackerRotation = new Quaternion(reference);
+		AprilTargetTrackerRotation.toAngles(angles);
+		AprilTargetTrackerRotation.fromAngles(0, angles[1], 0);
+
+		Quaternion AprilSensorRotation = new Quaternion();
+		AprilSensorRotation.set(tracker.aprilQuat);
+		AprilGyroFix.mult(AprilSensorRotation, AprilSensorRotation);
+		AprilSensorRotation.multLocal(AprilAttachmentFix);
+
+		AprilSensorRotation.toAngles(angles);
+		AprilSensorRotation.fromAngles(0, angles[1], 0);
+
+		AprilYawFix.set(AprilSensorRotation).inverseLocal().multLocal(AprilTargetTrackerRotation);
+
+		
 	}
 
 	private void fixGyroscope() {
@@ -93,12 +137,34 @@ public class ReferenceAdjustedTracker<E extends Tracker> implements Tracker {
 		sensorRotation.fromAngles(0, angles[1], 0);
 
 		gyroFix.set(sensorRotation).inverseLocal();
+
+
+
+		Quaternion AprilSensorRotation = new Quaternion();
+		AprilSensorRotation.set(tracker.aprilQuat);
+
+		AprilSensorRotation.toAngles(angles);
+		AprilSensorRotation.fromAngles(0, angles[1], 0);
+
+		AprilGyroFix.set(AprilSensorRotation).inverseLocal();
 	}
 
+	protected void AprilAdjustInternal(Quaternion store) {
+		AprilGyroFix.mult(store, store);
+		store.multLocal(AprilAttachmentFix);
+		AprilYawFix.mult(store, store);
+	}
 	protected void adjustInternal(Quaternion store) {
 		gyroFix.mult(store, store);
 		store.multLocal(attachmentFix);
 		yawFix.mult(store, store);
+	}
+
+	//@Override
+	public boolean getAprilRotation(Quaternion store) {
+		store.set(tracker.aprilQuat);
+		AprilAdjustInternal(store);
+		return true;
 	}
 
 	@Override

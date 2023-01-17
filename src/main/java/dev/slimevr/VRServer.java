@@ -4,6 +4,7 @@ import dev.slimevr.autobone.AutoBoneHandler;
 import dev.slimevr.bridge.Bridge;
 import dev.slimevr.bridge.VMCBridge;
 import dev.slimevr.config.ConfigManager;
+import dev.slimevr.pipes.PipeThread;
 import dev.slimevr.platform.windows.WindowsNamedPipeBridge;
 import dev.slimevr.poserecorder.BVHRecorder;
 import dev.slimevr.protocol.ProtocolAPI;
@@ -25,6 +26,8 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
@@ -33,6 +36,7 @@ import com.jme3.math.Vector3f;
 
 public class VRServer extends Thread {
 
+	
 	public final HumanPoseProcessor humanPoseProcessor;
 	public final HMDTracker hmdTracker;
 	private final List<Tracker> trackers = new FastList<>();
@@ -48,16 +52,20 @@ public class VRServer extends Thread {
 	private final AutoBoneHandler autoBoneHandler;
 	private final ProtocolAPI protocolAPI;
 	public pipes p = null;
-	public  RandomAccessFile AprilPipe = null;
+	//public  RandomAccessFile AprilPipe = null;
 	public  RandomAccessFile UnrealPipe = null;
 
-	public boolean connectToApril = true;
-	public boolean connectToUnreal = true;
+	public boolean connectToApril = false;
+	public boolean connectToUnreal = false;
 
 	public boolean reconnecToUnreal = false;
+	public boolean ApplyOffset = false;
 
 	private final ConfigManager configManager;
 	public boolean DebugWinSpawned = false;
+
+	PipeThread AprilPipe = null; //pipe to comunicate with AprilTags
+	//PipeThread UnrealPipe = null; //pipe to comunicate with Unreal
 
 	/**
 	 * This function is used by VRWorkout, do not remove!
@@ -68,14 +76,55 @@ public class VRServer extends Thread {
 		p = new pipes();
 		byte[] buf = new byte[1];
 		try {
+			if (UnrealPipe != null)
+				UnrealPipe.close();
 			UnrealPipe = p.connect_to_pipe(pipe_path);
 			int ret = UnrealPipe.read(buf, 0, 1);
 			UnrealPipe.write(buf, 0, 1);
-			if (buf[0] == 99)
+			if (buf[0] == 99){
 				System.out.println("Connection to Unreal succesful");
+				connectToUnreal = true;
+			}
+			else {connectToUnreal = false;
+				System.out.println("Connection to Unreal NOT succesful");
+
+			}
 		} catch (InterruptedException | IOException e1) {
 			e1.printStackTrace();
 		}
+	}
+
+	
+	public void ConnectToApril()
+	{
+	AprilPipe = new PipeThread(String.format("\\\\.\\pipe\\slimevr_april_pipe_%d", 0));
+	AprilPipe.start();
+
+	// String pipe_path = String.format("\\\\.\\pipe\\slimevr_april_pipe_%d", 0);
+	// p = new pipes();
+	
+	// byte[] buf = new byte[1];
+
+	// try {
+	// 	if (AprilPipe != null)
+	// 		AprilPipe.close();
+	// 	AprilPipe = p.connect_to_pipe(pipe_path);
+	// 	int ret = AprilPipe.read(buf, 0, 1);
+	// 	AprilPipe.write(buf, 0, 1);
+	// 	if (buf[0] == 99){
+	// 		connectToApril = true;
+	// 		System.out.println("Connection to Apriltag succesful");
+	// 	}
+	// 	else{
+	// 		connectToApril = false;
+	// 		System.out.println("Connection to Apriltag NOT succesful");
+	// 	}
+
+
+	// } catch (InterruptedException | IOException e1) {
+	// 	// TODO Auto-generated catch block
+	// 	e1.printStackTrace();
+	// }
 	}
 
 	public VRServer() {
@@ -86,29 +135,14 @@ public class VRServer extends Thread {
 		super("VRServer");
 
 		//	sprintf(pipe_path, "%s%d", "\\\\.\\pipe\\tparser_main_pipe_id_", 0);
-		if (connectToApril){
-			String pipe_path = String.format("\\\\.\\pipe\\slimevr_april_pipe_%d", 0);
-
-			p = new pipes();
-			byte[] buf = new byte[1];
-
-			try {
-				AprilPipe = p.connect_to_pipe(pipe_path);
-				int ret = AprilPipe.read(buf, 0, 1);
-				AprilPipe.write(buf, 0, 1);
-				if (buf[0] == 99)
-					System.out.println("Connection to Apriltag succesful");
-
-
-			} catch (InterruptedException | IOException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			}
-		}
-		if (connectToUnreal)
-		{
-			connectToUE();
-		}
+	//	if (connectToApril){
+	//		ConnectToApril();
+	//	}
+		
+		// if (connectToUnreal)
+		// {
+		// 	connectToUE();
+		// }
 		
 		this.configManager = new ConfigManager(configPath);
 		this.configManager.loadConfig();
@@ -250,14 +284,14 @@ public class VRServer extends Thread {
 			}
 			for (Tracker tracker : trackers) {
 				tracker.tick();
-				String s = tracker.getName();
-				if (s.equals("human://RIGHT_UPPER_LEGa"))
-				{ 
-					Vector3f v = new Vector3f(0, 0, 0);
-					tracker.getPosition(v);
-					s = String.format("%.4f %.4f %.4f", v.x, v.y, v.z);
-					System.out.println(s);
-				}
+				// String s = tracker.getName();
+				// if (s.equals("human://RIGHT_UPPER_LEGa"))
+				// { 
+				// 	Vector3f v = new Vector3f(0, 0, 0);
+				// 	tracker.getPosition(v);
+				// 	s = String.format("%.4f %.4f %.4f", v.x, v.y, v.z);
+				// 	System.out.println(s);
+				// }
 
 			}
 			humanPoseProcessor.update();
@@ -275,6 +309,7 @@ public class VRServer extends Thread {
 	public void queueTask(Runnable r) {
 		tasks.add(r);
 	}
+
 
 	@VRServerThread
 	private void trackerAdded(Tracker tracker) {
@@ -382,4 +417,19 @@ public class VRServer extends Thread {
 	public ConfigManager getConfigManager() {
 		return configManager;
 	}
+
+	public  double toDouble(byte[] bytes) {
+		return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getDouble();
+	}
+	public  byte[] DoubleToBytes(double d) {
+		byte[] bytes = new byte[8];
+		ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putDouble(d);
+		return bytes;
+	}
+	public  byte[] FloatToBytes(float d) {
+		byte[] bytes = new byte[4];
+		ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putFloat(d);
+		return bytes;
+	}
+	
 }

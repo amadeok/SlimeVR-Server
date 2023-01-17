@@ -110,11 +110,15 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 	// @formatter:on
 	// #endregion
 	// #region Buffers
-	private  Quaternion aprilQuat = new Quaternion();
+	// private  Quaternion PrevAprilQuat = new Quaternion();
+	// private  Quaternion aprilQuat = new Quaternion();
+	// private  Quaternion CorrectionQuat = new Quaternion();
+	// private  Quaternion CorrectedQuat = new Quaternion();
 
 	private final Vector3f aprilVec = new Vector3f();
-	private byte[] aprilRecvBuff = new byte[57];
-	private byte[] aprilVecBuff = new byte[8];
+	// private byte[] aprilRecvBuff = new byte[57];
+	// private byte[] aprilVecBuff = new byte[8];
+	// public byte aprilDataAvailable = 0;
 
 	private final Vector3f posBuf = new Vector3f();
 	private final Quaternion rotBuf1 = new Quaternion();
@@ -885,53 +889,60 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 
 		Quaternion sq = new Quaternion();
 		Quaternion aq = new Quaternion();
-		if (rightUpperLegTracker != null)
+		if (rightUpperLegTracker != null){
 		rightUpperLegTracker.getRotation(sq);
-		aq.fromAngles(aprilVec.x, aprilVec.y, aprilVec.z);
-		Quaternion q = sq.mult(aq.inverse());
+		aq = rightUpperLegTracker.aprilQuat;//.fromAngles(aprilVec.x, aprilVec.y, aprilVec.z);
+		Quaternion q = new Quaternion();
+		try {
+			if (sq != null && aq != null)
+			q = sq.mult(aq.inverse());
+		} catch (Exception e) {
+			System.out.println(e);
+		}
+
+		}
 		String s = String.format("%.4f %.4f %.4f %.4f || %.4f %.4f %.4f %.4f", sq.getW(),  sq.getX(), sq.getY(), sq.getZ(), aq.getW(),  aq.getX(), aq.getY(), aq.getZ() );
-		System.out.println(q);
+		//System.out.println(q);
+		//if (vrserverRef.ApplyOffset)
+		//	rightUpperLegTracker.aprilQuat.set(rightUpperLegTracker.aprilQuat.mult(rightUpperLegTracker.AprilResetCorrection));
+	//System.out.println(rightUpperLegTracker.aprilQuat);
 
 		if (vrserverRef.connectToUnreal)
 		{
-			pipeToUE(sq, aq);
+			Quaternion q = new Quaternion();
+			rightUpperLegTracker.getAprilRotation(q);
+			pipeToUE(sq, q);
 		}
 
 	}
 	// #endregion
-	public static double toDouble(byte[] bytes) {
-		return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getDouble();
-	}
-	public static byte[] DoubleToBytes(double d) {
-		byte[] bytes = new byte[8];
-		ByteBuffer.wrap(bytes).putDouble(d);
-		return bytes;
-	}
-	public static byte[] FloatToBytes(float d) {
-		byte[] bytes = new byte[4];
-		ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putFloat(d);
-		return bytes;
-	}
+
 
 	protected void pipeToUE(Quaternion q1, Quaternion q2) {
-		byte[] bytes = new byte[76];
+		byte[] bytes = new byte[77];
 		try {
-			System.arraycopy(FloatToBytes(q1.getW()), 0, bytes, 0, 4);
-			System.arraycopy(FloatToBytes(q1.getX()), 0, bytes, 4, 4);
-			System.arraycopy(FloatToBytes(q1.getY()), 0, bytes, 8, 4);
-			System.arraycopy(FloatToBytes(q1.getZ()), 0, bytes, 12, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(q1.getW()), 0, bytes, 0, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(q1.getX()), 0, bytes, 4, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(q1.getY()), 0, bytes, 8, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(q1.getZ()), 0, bytes, 12, 4);
 
-			System.arraycopy(FloatToBytes(q2.getW()), 0, bytes, 16, 4);
-			System.arraycopy(FloatToBytes(q2.getX()), 0, bytes,20, 4);
-			System.arraycopy(FloatToBytes(q2.getY()), 0, bytes, 24, 4);
-			System.arraycopy(FloatToBytes(q2.getZ()), 0, bytes, 28, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(q2.getW()), 0, bytes, 16, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(q2.getX()), 0, bytes,20, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(q2.getY()), 0, bytes, 24, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(q2.getZ()), 0, bytes, 28, 4);
 
-			System.arraycopy(FloatToBytes(aprilVec.getX()), 0, bytes,32, 4);
-			System.arraycopy(FloatToBytes(aprilVec.getY()), 0, bytes, 36, 4);
-			System.arraycopy(FloatToBytes(aprilVec.getZ()), 0, bytes, 40, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(aprilVec.getX()), 0, bytes,32, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(aprilVec.getY()), 0, bytes, 36, 4);
+			System.arraycopy(vrserverRef.FloatToBytes(aprilVec.getZ()), 0, bytes, 40, 4);
 
-			System.arraycopy(aprilRecvBuff, 25, bytes,44, 32);
-
+			System.arraycopy(vrserverRef.DoubleToBytes(rightUpperLegTracker.aprilQuat.getW()), 0, bytes, 44, 8);
+			System.arraycopy(vrserverRef.DoubleToBytes(rightUpperLegTracker.aprilQuat.getX()), 0, bytes,52, 8);
+			System.arraycopy(vrserverRef.DoubleToBytes(rightUpperLegTracker.aprilQuat.getY()), 0, bytes, 60,8);
+			System.arraycopy(vrserverRef.DoubleToBytes(rightUpperLegTracker.aprilQuat.getZ()), 0, bytes, 68, 8);
+			
+			//System.arraycopy(aprilRecvBuff, 25, bytes,44, 32);
+			bytes[76] = rightUpperLegTracker.IsAprilDataAvailable();
+		//	bytes[76] =  (byte)rightUpperLegTracker.IsAprilDataAvailable();
 			vrserverRef.UnrealPipe.write(bytes);
 			vrserverRef.UnrealPipe.read(bytes, 0, 1);
 
@@ -946,41 +957,59 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 
 	}
 	protected void GetAprilVectors() {
-		try {
-			vrserverRef.AprilPipe.read(aprilRecvBuff, 0, 57);
-			 //=  aprilRecvBuff[0:10];
-			System.arraycopy(aprilRecvBuff, 1, aprilVecBuff, 0, 8);
+		//try {
+			// vrserverRef.AprilPipe.write(1);
+			// int ret = vrserverRef.AprilPipe.read(aprilRecvBuff, 0, 57);
+			// if (ret == -1)
+			// {
+			// 	vrserverRef.connectToApril = false;
+			// 	vrserverRef.AprilPipe.close();
+			// 	vrserverRef.AprilPipe = null;
+			// }
+			// aprilDataAvailable = aprilRecvBuff[0];
+			//  //=  aprilRecvBuff[0:10];
+			// System.arraycopy(aprilRecvBuff, 1, aprilVecBuff, 0, 8);
 
-			aprilVec.x = (float)toDouble(aprilVecBuff);
-			System.arraycopy(aprilRecvBuff, 9, aprilVecBuff, 0, 8);
+			// aprilVec.x = (float)toDouble(aprilVecBuff);
+			// System.arraycopy(aprilRecvBuff, 9, aprilVecBuff, 0, 8);
 
-			aprilVec.y = (float)toDouble(aprilVecBuff);
-			System.arraycopy(aprilRecvBuff, 17, aprilVecBuff, 0, 8);
+			// aprilVec.y = (float)toDouble(aprilVecBuff);
+			// System.arraycopy(aprilRecvBuff, 17, aprilVecBuff, 0, 8);
 
-			aprilVec.z = (float)toDouble(aprilVecBuff);
+			// aprilVec.z = (float)toDouble(aprilVecBuff);
 
-			float w, x, y, z;
+			// float w, x, y, z;
 
-			System.arraycopy(aprilRecvBuff, 25, aprilVecBuff, 0, 8);
-			w = (float)toDouble(aprilVecBuff);
+			// System.arraycopy(aprilRecvBuff, 25, aprilVecBuff, 0, 8);
+			// w = (float)toDouble(aprilVecBuff);
 
-			System.arraycopy(aprilRecvBuff, 33, aprilVecBuff, 0, 8);
-			x = (float)toDouble(aprilVecBuff);
+			// System.arraycopy(aprilRecvBuff, 33, aprilVecBuff, 0, 8);
+			// x = (float)toDouble(aprilVecBuff);
 
-			System.arraycopy(aprilRecvBuff, 41, aprilVecBuff, 0, 8);
-			y = (float)toDouble(aprilVecBuff);
+			// System.arraycopy(aprilRecvBuff, 41, aprilVecBuff, 0, 8);
+			// y = (float)toDouble(aprilVecBuff);
 
-			System.arraycopy(aprilRecvBuff, 49, aprilVecBuff, 0, 8);
-			z = (float)toDouble(aprilVecBuff);
+			// System.arraycopy(aprilRecvBuff, 49, aprilVecBuff, 0, 8);
+			// z = (float)toDouble(aprilVecBuff);
 
-			aprilQuat.set(w, x, y, z);
+			// rightUpperLegTracker.PrevAprilQuat.set(rightUpperLegTracker.aprilQuat);
+			// rightUpperLegTracker.aprilQuat.set(x, y, z, w);
 
 
 
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		// } catch (IOException e) {
+		// 	// TODO Auto-generated catch block
+		// 	e.printStackTrace();
+		// 	try {
+		// 	vrserverRef.connectToApril = false;
+		// 	vrserverRef.AprilPipe.close();
+		// 	vrserverRef.AprilPipe = null;
+		// 	}
+		// 	catch (IOException e2) {
+		// 		e2.printStackTrace();
+
+		// 	}
+		// }
 
 	}
 
@@ -1118,11 +1147,34 @@ public class HumanSkeleton extends Skeleton implements SkeletonConfigCallback {
 			rotBuf1.slerpLocal(rotBuf2, kneeTrackerAnkleAveraging);
 			trackerLeftKneeNode.localTransform.setRotation(rotBuf1);
 		}
-
 		// Right Leg
 		// Get rotations
 		if (rightUpperLegTracker != null) {
+			rightUpperLegTracker.IsAprilDataAvailable();
+			Byte n = 9;
+			rightUpperLegTracker.SetAprilDataAvailable(n);
 			rightUpperLegTracker.getRotation(rotBuf1);
+			if (vrserverRef.connectToApril)
+			{
+				if (rightUpperLegTracker.IsAprilDataAvailable() == 1)
+				{
+					Quaternion deltaQuat = rightUpperLegTracker.aprilQuat.mult(rightUpperLegTracker.PrevAprilQuat.inverse());
+
+					float max = Math.max(deltaQuat.getX(), Math.max(deltaQuat.getY(), deltaQuat.getZ()));
+					if (Math.abs(max) < 0.2 )
+					{
+						rightUpperLegTracker.CorrectionQuat.set(rotBuf1.mult(rightUpperLegTracker.aprilQuat.inverse()));
+					}
+				}
+			//	String s = String.format("%.4f %.4f %.4f %.4f", sq.getW(),  sq.getX(), sq.getY(), sq.getZ()) );
+				rightUpperLegTracker.CorrectedQuat.set(rightUpperLegTracker.CorrectionQuat.mult(rotBuf1));
+				rightUpperLegTracker.CorrectedQuat.set(rightUpperLegTracker.AprilResetCorrection.mult(rightUpperLegTracker.CorrectedQuat));
+				//rightUpperLegTracker.CorrectedQuat.multLocal(rightUpperLegTracker.AprilResetCorrection);
+				if (vrserverRef.ApplyOffset)
+					rightUpperLegTracker.aprilQuat.set(rightUpperLegTracker.AprilResetCorrection.mult(rightUpperLegTracker.aprilQuat));
+
+				rotBuf1.set(rightUpperLegTracker.CorrectedQuat);
+			}
 		} else {
 			// Align with the hip's yaw
 			hipNode.localTransform.getRotation(rotBuf1);

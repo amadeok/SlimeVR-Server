@@ -16,9 +16,23 @@ public interface Tracker {
 		return nextLocalTrackerId.incrementAndGet();
 	}
 
+	public Quaternion AprilResetCorrection = new Quaternion();
+	public  Quaternion PrevAprilQuat = new Quaternion();
+	public  Quaternion aprilQuat = new Quaternion();
+	public  Quaternion CorrectionQuat = new Quaternion();
+	public  Quaternion CorrectedQuat = new Quaternion();
+	//public  Byte aprilDataAvailable = 0;
+	//byte aprilDataAvailable = 0;
+
+	// public default void SetAprilDataAvailable(Byte b)
+	// {
+	// 	aprilDataAvailable = b;
+	// }
+
 	boolean getPosition(Vector3f store);
 
 	boolean getRotation(Quaternion store);
+	boolean getAprilRotation(Quaternion store);
 
 	boolean getAcceleration(Vector3f store);
 
@@ -67,6 +81,15 @@ public interface Tracker {
 	 * will return the tracker it modifies. Otherwise, it will return itself.
 	 */
 	Tracker get();
+
+    default void SetAprilDataAvailable(Byte b)
+	{
+	}
+
+    default Byte IsAprilDataAvailable()
+	{
+		return 0;
+	}
 
 
 }

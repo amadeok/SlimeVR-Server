@@ -197,6 +197,21 @@ public class IMUTracker
 		store.multLocal(rotAdjust);
 		return true;
 	}
+	@Override
+	public boolean getAprilRotation(Quaternion store) {
+		if (movementFilterTickCount > 0 && movementFilterAmount != 1 && previousRots.size() > 0) {
+			buffQuat.set(previousRots.get(0));
+			buffQuat.slerpLocal(rotQuaternion, movementFilterAmount);
+			store.set(buffQuat);
+		} else {
+			store.set(rotQuaternion);
+		}
+		// correction.mult(store, store); // Correction is not used now to
+		// prevent
+		// accidental errors while debugging other things
+		store.multLocal(rotAdjust);
+		return true;
+	}
 
 	public void getCorrection(Quaternion store) {
 		store.set(correction);

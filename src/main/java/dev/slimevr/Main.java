@@ -23,6 +23,8 @@ public class Main {
 
 	public static void main(String[] args) {
 
+
+	
 		System.setProperty("awt.useSystemAAFontSettings", "on");
 		System.setProperty("swing.aatext", "true");
 
@@ -116,5 +118,17 @@ public class Main {
 				e.printStackTrace();
 			}
 		}
+		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+			public void run() {
+				System.out.println("In shutdown hook");
+				try {
+					vrServer.AprilPipe.pipe.write(99);
+					vrServer.AprilPipe.pipe.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}, "Shutdown-thread"));
 	}
+	
 }

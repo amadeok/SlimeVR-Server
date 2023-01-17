@@ -2,6 +2,7 @@ package dev.slimevr;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -9,11 +10,15 @@ import java.nio.ByteOrder;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-
+import dev.slimevr.vr.processor.skeleton.HumanSkeleton;
 import javax.swing.text.DefaultStyledDocument;
 
-public class pipes {
+import com.jme3.math.Vector3f;
 
+import dev.slimevr.vr.trackers.Tracker;
+
+public class pipes {
+    
    // static List<AutoDetectParser> parser_list = new ArrayList<AutoDetectParser>();
     static int SessionId;
     static boolean stop = false;
@@ -85,151 +90,133 @@ public class pipes {
         return pipe;
     }
 
-    static class TparserThread implements Runnable {
-        Thread Tparserthread;
+    static class PipeThread implements Runnable {
+        Thread PipeThread;
         private int TparserId;
-        byte[] file_path_len = new byte[4];
+        byte[] buf = new byte[4];
+        String PipePath;
+        PipeThread(String pipePath) {
+            PipePath = pipePath;
+        }
+        private byte[] aprilRecvBuff = new byte[57];
+        private byte[] aprilVecBuff = new byte[8];
+       // public byte aprilDataAvailable = 0;
+        private final Vector3f aprilVec = new Vector3f();
+        
+        RandomAccessFile pipe = null;
+        VRServer vrServerRef = null;
+       List<Tracker> trackers;
+      public Tracker rightUpperLegTracker;
 
-        TparserThread(int id) {
-            TparserId = id;
+        public boolean init(VRServer vrServer) throws InterruptedException, IOException
+        {
+            vrServerRef = vrServer;
+            trackers = vrServerRef.getAllTrackers();
+            for (Tracker tracker : trackers){
+                String s = tracker.getName();
+				if (s.equals("human://RIGHT_UPPER_LEG"))
+				{ 
+                    rightUpperLegTracker = tracker;
+				}
+            }
+            boolean connectionSuccess = false;    
+            System.out.println("Opening pipe " + PipePath);
+
+            pipe = connect_to_pipe(PipePath);
+             if (pipe == null)
+                return false;
+            System.out.println("Pipe " + PipePath + " opened");
+
+            int ret = pipe.read(buf, 0, 1);
+            pipe.write(buf, 0, 1);
+            if (buf[0] == 99){
+                connectionSuccess = true;
+                System.out.println("Connection to Apriltag succesful");
+            }
+            else{
+                connectionSuccess = false;
+                System.out.println("Connection to Apriltag NOT succesful");
+            }
+            return connectionSuccess;
         }
 
         @Override
 
         public void run() {
-            System.out.println("Thread running ID" + TparserId);
+            System.out.println("Pipe Thread running " + PipePath);
 
-            //AutoDetectParser parser = new AutoDetectParser();
-
-            RandomAccessFile pipe = null;
-           // RTFEditorKit rek = new RTFEditorKit();
-
-            try {
-
-                System.out.println("Tparser ID " + TparserId + "started");
-
-                // System.out.println("Tparser ID " + id + ": Initiating..");
-                // // Tika tika = new Tika();
-                // System.out.println("Tparser ID " + id + ": ready");
-
-                System.out.println("Tparser ID " + TparserId + ": opening pipe..");
-
-                String pipe_path = String.format("\\\\.\\pipe\\tparser_pipe_id_%d-%d", SessionId, TparserId);
-
-                pipe = connect_to_pipe(pipe_path);
-                 if (pipe == null)
-                    return;
-                System.out.println("Tparser ID " + TparserId + "Pipe " + pipe_path + " opened");
-
-                int ret = 0;
-                String text;
-                boolean from_html;
-                while (true) {
-                    String input_file = "";
-                    ByteBuffer parsed_byte_size;
-                    System.out.println("Tparser ID " + TparserId + ": wating for file..");
-
-                    ret = pipe.read(file_path_len, 0, 4);
-                    if (ret != 4)
-                        System.out.println("Tparser ID " + TparserId + " ret wrong 0");
-
-                    int receive_len = bytesToInt(file_path_len);
-
-                    if (receive_len == Signals.EXIT.getValue() || receive_len == -1)
-                        { 
-                            System.out.println("Tparser ID " + TparserId + " received end signal or -1");
-                            break;
-                        }
-                    if (receive_len == -10)  // its from html
-                       { 
-                        ret = pipe.read(file_path_len, 0, 4);
-                        receive_len = bytesToInt(file_path_len);
-                        from_html = true;
-                       }   else from_html = false;
-                       
-                    byte[] buffer = new byte[receive_len];
-
-                    System.out.println("Tparser ID " + TparserId + " receive_len " + receive_len);
-
-                    ret = pipe.read(buffer, 0, receive_len);
-                    if (ret != receive_len)
-                        System.out.println("Tparser ID " + TparserId + " ret wrong 1");
-
-
-                    long now = Instant.now().toEpochMilli();
-                    
-                    InputStream stream;
-                    if (!from_html)
+                try 
+                {
+                    pipe.write(1);
+                    int ret = pipe.read(aprilRecvBuff, 0, 57);
+                    if (ret == -1)
                     {
-                        input_file = new String(buffer);
-                        System.out.println("Tparser ID " + TparserId + ": parsing file " + input_file);
-                        stream = new FileInputStream(input_file);
+                        vrServerRef.connectToApril = false;
+                        pipe.close();
+                        pipe = null;
                     }
-                    else
-                       {
-                        stream = new ByteArrayInputStream(buffer);
-                        System.out.println("Tparser ID " + TparserId + ": parsing from html ");
+                    rightUpperLegTracker.SetAprilDataAvailable(aprilRecvBuff[0]);
+                     //=  aprilRecvBuff[0:10];
+                    System.arraycopy(aprilRecvBuff, 1, aprilVecBuff, 0, 8);
+        
+                    aprilVec.x = (float)vrServerRef.toDouble(aprilVecBuff);
+                    System.arraycopy(aprilRecvBuff, 9, aprilVecBuff, 0, 8);
+        
+                    aprilVec.y = (float)vrServerRef.toDouble(aprilVecBuff);
+                    System.arraycopy(aprilRecvBuff, 17, aprilVecBuff, 0, 8);
+        
+                    aprilVec.z = (float)vrServerRef.toDouble(aprilVecBuff);
+        
+                    float w, x, y, z;
+        
+                    System.arraycopy(aprilRecvBuff, 25, aprilVecBuff, 0, 8);
+                    w = (float)vrServerRef.toDouble(aprilVecBuff);
+        
+                    System.arraycopy(aprilRecvBuff, 33, aprilVecBuff, 0, 8);
+                    x = (float)vrServerRef.toDouble(aprilVecBuff);
+        
+                    System.arraycopy(aprilRecvBuff, 41, aprilVecBuff, 0, 8);
+                    y = (float)vrServerRef.toDouble(aprilVecBuff);
+        
+                    System.arraycopy(aprilRecvBuff, 49, aprilVecBuff, 0, 8);
+                    z = (float)vrServerRef.toDouble(aprilVecBuff);
+        
+                    rightUpperLegTracker.PrevAprilQuat.set(rightUpperLegTracker.aprilQuat);
+                    rightUpperLegTracker.aprilQuat.set(x, y, z, w);
+        
+        
+        
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    try {
+                    vrServerRef.connectToApril = false;
+                    pipe.close();
+                    pipe = null;
                     }
-
-                    if (true) {
-                        BodyContentHandler handler = new BodyContentHandler();
-                        Metadata metadata = new Metadata();
-                       // parser_list.get(TparserId).parse(stream, handler, metadata);
-                        text = handler.toString();
+                    catch (IOException e2) {
+                        e2.printStackTrace();
                     }
-                    else {
-                        DefaultStyledDocument doc = new DefaultStyledDocument();
-                     //   rek.read(stream, doc, 0);
-                        text = doc.getText(0, doc.getLength());
-                    }
-
-                    // String text = tika.parseToString(new File(input_file));
-
-                    // byte[] parsed_byte_size_ = ByteBuffer.allocate(4).putInt(size).array();
-                    byte[] bytes = text.getBytes();
-                    int size = bytes.length;// - 1;
-                    byte[] size_bytes = intToBytes(size);
-
-                    pipe.write(size_bytes, 0, 4);
-                    System.out.println("Tparser ID " + TparserId + " size " + size);
-
-                    // if (ret != 4)
-                    // System.out.println("Tparser ID " + TparserId + " ret wrong 2");
-
-                    pipe.write(bytes, 0, size);
-                    // if (ret != size)
-                    // System.out.println("Tparser ID " + TparserId + " ret wrong 3");
-
-                    System.out.println("Tparser ID " + TparserId + "parse took "
-                            + Long.toString(Instant.now().toEpochMilli() - now));
-                    // System.out.println(text);
-                    stream.close();
-                    // stream = null;
-                    // handler = null;
-                    // metadata = null;
                 }
+                
                 byte[] size_bytes = intToBytes(-1);
-                pipe.write(size_bytes);
-                pipe.close();
+                try {
+                    pipe.write(size_bytes);
+                    pipe.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
 
                 System.out.println("Tparser ID " + TparserId + " ended");
-            } catch (Exception e) {
-                System.out.println("Sparser ID " + TparserId + " something went wrong. \n" + e);
-                try {
-                    pipe.close();
-                } catch (Exception e2) {
-                    System.out.println("Sparser ID " + TparserId + " Something went wrong. \n" + e2);
-                }
-            }
-            System.out.println("Tparser ID " + TparserId + " reached end of function");
+           
 
         }
+    
 
         public void start() {
             // System.out.println("Thread started");
-            if (Tparserthread == null) {
-                Tparserthread = new Thread(this);
-                Tparserthread.start();
+            if (PipeThread == null) {
+                PipeThread = new Thread(this);
+                PipeThread.start();
             }
 
         }
